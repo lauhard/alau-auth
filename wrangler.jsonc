@@ -1,0 +1,67 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "alau-auth",
+	"compatibility_date": "2026-05-14",
+	"compatibility_flags": [
+		"nodejs_als",
+		"nodejs_compat"
+	],
+	"routes": [
+		{
+			"pattern": "auth.alau.at",
+			"custom_domain": true
+		}
+	],
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "alau-auth-db",
+			"database_id": "2bceefc6-a57b-43dd-a246-9a4cb6fec7db",
+			"remote": true
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "ccb9931414994cf3baaf564ed1e0bf72",
+			"remote": true
+		}
+	],
+	// "durable_objects": {
+	// 	"bindings": [
+	// 		{
+	// 			"name": "SESSION_MONITOR",
+	// 			"class_name": "SessionMonitorDO"
+	// 		},
+	// 		{
+	// 			"name": "AUDIT_LOG",
+	// 			"class_name": "AuditLogDO"
+	// 		},
+	// 		{
+	// 			"name": "APP_LOG",
+	// 			"class_name": "AppLogDO"
+	// 		}
+	// 	]
+	// },
+	// "migrations": [
+	// 	{
+	// 		"tag": "v1",
+	// 		"new_sqlite_classes": [
+	// 			"SessionMonitorDO",
+	// 			"AuditLogDO",
+	// 			"AppLogDO"
+	// 		]
+	// 	}
+	// ],
+	"vars": {
+		"PUBLIC_APP_URL": "https://auth.alau.at",
+		"PUBLIC_APP_NAME": "ALAU Auth"
+	},
+	"workers_dev": true,
+	"preview_urls": true
+}
