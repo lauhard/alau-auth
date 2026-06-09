@@ -6,5 +6,6 @@ import type { Platform } from '../../../../app';
 
 export const local = (platform: Platform): ReturnType<typeof drizzle<typeof schema>> => {
     const client = new Database(platform.env.DATABASE_URL);
+    client.pragma('foreign_keys = ON');
     return drizzle(client, {schema} );
 }

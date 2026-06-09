@@ -1,3 +1,3 @@
 export * from './auth';
 export * from './webapp';
-export * from './webappRelations';
+export * from './customer';

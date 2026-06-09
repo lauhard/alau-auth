@@ -5,7 +5,10 @@ import {
   integer,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/sqlite-core";
+import { webapp } from "./webapp";
+import { customer } from "./customer";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -26,10 +29,16 @@ export const user = sqliteTable("user", {
   banned: integer("banned", { mode: "boolean" }).default(false),
   banReason: text("ban_reason"),
   banExpires: integer("ban_expires", { mode: "timestamp_ms" }),
-  webappId: text("webapp_id"),
+  // This is the foreign key to the webapp, allowing us to scope users to a specific webapp.
+  webappId: text("webapp_id").references(() => webapp.id),
   //  Index for efficient lookup of users by email within a webapp context
 }, (table) => [
-  index("user_webappId_idx").on(table.webappId),
+  index("user_webapp_id_idx").on(table.webappId),
+  // webappId is not allowed to be null, except for platformAdmin
+  check(
+    "user_webapp_id_check",
+    sql`${table.webappId} IS NOT NULL OR ${table.role} = 'platformAdmin'`
+  )
 ]
 );
 
@@ -43,6 +52,7 @@ export const session = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
     ipAddress: text("ip_address"),
@@ -81,6 +91,7 @@ export const account = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
@@ -112,13 +123,26 @@ export const organization = sqliteTable(
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     logo: text("logo"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
     metadata: text("metadata"),
-    webappId: text("webapp_id").notNull(),
+    // Foreign key to webapp, allowing us to scope organizations to a specific webapp.
+    // It deletes all related organizations if the webapp is deleted, but not the users.
+    // allowing them to be re-assigned to another organization if needed.
+    webappId: text("webapp_id")
+      .notNull()
+      // cascade delete of organizations if webapp is deleted, but not users.
+      .references(() => webapp.id, { onDelete: "cascade" }),
+    customerId: text("customer_id")
+      .notNull()
+      // restrict deletion of customer if organizations exist.
+      .references(() => customer.id, { onDelete: "restrict" }), 
   },
-  (table) => [
+   (table) => [
     uniqueIndex("organization_webapp_slug_uidx").on(table.webappId, table.slug), // Composite: unique per Webapp
     index("organization_webapp_id_idx").on(table.webappId),
+    index("organization_customer_id_idx").on(table.customerId),
   ],
 );
 
@@ -130,10 +154,13 @@ export const team = sqliteTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$onUpdate(
-      () => /* @__PURE__ */ new Date(),
-    ),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
   },
   (table) => [index("team_organizationId_idx").on(table.organizationId)],
 );
@@ -148,7 +175,9 @@ export const teamMember = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
   },
   (table) => [
     index("teamMember_teamId_idx").on(table.teamId),
@@ -167,7 +196,9 @@ export const member = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").default("member").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
   },
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
@@ -200,7 +231,20 @@ export const invitation = sqliteTable(
   ],
 );
 
-export const userRelations = relations(user, ({ many }) => ({
+// Relations
+// Needed for joins and eager loading of related data.
+
+/**
+ * User Relations:
+ * one-to-many with sessions, accounts, teamMembers, members, invitations
+ * many-to-one with webapp
+ * Enhance standard auth tables with user-specific relations.
+ */
+export const userRelations = relations(user, ({ one, many }) => ({
+  webapp: one(webapp, {
+    fields: [user.webappId],
+    references: [webapp.id],
+  }),
   sessions: many(session),
   accounts: many(account),
   teamMembers: many(teamMember),
@@ -208,25 +252,45 @@ export const userRelations = relations(user, ({ many }) => ({
   invitations: many(invitation),
 }));
 
-export const sessionRelations = relations(session, ({ one }) => ({
-  user: one(user, {
-    fields: [session.userId],
-    references: [user.id],
-  }),
-}));
 
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
+/**
+ * Organization Relations:
+ * many-to-one with webapp
+ * one-to-many with teams, members, invitations
+ * Enhance standard auth tables with organization-specific relations.
+ */
+export const organizationRelations = relations(organization, ({ one, many }) => ({
+  webapp: one(webapp, {
+    fields: [organization.webappId],
+    references: [webapp.id],
   }),
-}));
-
-export const organizationRelations = relations(organization, ({ many }) => ({
+  customer: one(customer, {
+    fields: [organization.customerId],
+    references: [customer.id],
+  }),
   teams: many(team),
   members: many(member),
   invitations: many(invitation),
 }));
+
+/**
+ * Webapp Relations:
+ * one-to-many with users and organizations
+ * Enhance standard auth tables with webapp-specific relations.
+ */
+export const webappRelations = relations(webapp, ({ many }) => ({
+    users: many(user),
+    organizations: many(organization),
+}))
+
+/**
+ * Customer Relations:
+ * one-to-many with organizations
+ * Enhance standard auth tables with customer-specific relations.
+ */
+export const customerRelations = relations(customer, ({ many }) => ({
+    organizations: many(organization),
+}))
 
 export const teamRelations = relations(team, ({ one, many }) => ({
   organization: one(organization, {
@@ -236,6 +300,7 @@ export const teamRelations = relations(team, ({ one, many }) => ({
   teamMembers: many(teamMember),
 }));
 
+// join table relations
 export const teamMemberRelations = relations(teamMember, ({ one }) => ({
   team: one(team, {
     fields: [teamMember.teamId],
@@ -268,3 +333,18 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id],
+  }),
+}));
+
