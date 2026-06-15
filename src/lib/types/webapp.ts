@@ -29,9 +29,5 @@ export interface WebappListItem {
   createdAt: Date; // timestamp in ms
 }
 
-
 export type WebappError = 'NOT_FOUND' | 'DUPLICATE' | 'VALIDATION';
-export type WebappResult<T> = Result<T> & (
-  | { success: true }
-  | { success: false; code: WebappError }
-);
+export type WebappResult<T> = Result<T, WebappError>;

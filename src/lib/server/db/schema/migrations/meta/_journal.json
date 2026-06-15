@@ -43,6 +43,13 @@
       "when": 1780929766584,
       "tag": "0005_flat_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781123761064,
+      "tag": "0006_glamorous_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

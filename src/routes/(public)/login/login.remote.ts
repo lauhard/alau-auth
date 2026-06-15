@@ -34,11 +34,11 @@ export const loginWithPassword = command(
                 success: false,
                 error: errorData.message || "Login failed",
                 code: errorData.code || "LOGIN_FAILED"
-            } satisfies Result<never>;
+            } satisfies Result<BetterAuthError>;
         }
 
         return {
             success: true,
-        } satisfies Result<null>;
+        } 
     }
 );

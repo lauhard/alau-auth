@@ -12,7 +12,7 @@
     async function handleSubmit() {
         const result = await loginWithPassword({ email, password });
         if (result && !result.success) {
-            error = result.error;
+            error = result.error ?? "An error occurred during login.";
         }
         else{
             goto("/admin/webapps");

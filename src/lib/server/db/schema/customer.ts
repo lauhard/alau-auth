@@ -41,8 +41,7 @@ export const customer = sqliteTable("customer", {
         displayName: text("display_name")
             .notNull(),
         contactName: text("contact_name"),
-        contactEmail: text("contact_email")
-            .notNull(),
+        contactEmail: text("contact_email"),
         country: text("country")
             .notNull(),
         registrationNumber: text("registration_number"),
